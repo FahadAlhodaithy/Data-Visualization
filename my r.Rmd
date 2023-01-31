@@ -1,0 +1,230 @@
+---
+title: "Data visualization Project"
+author: "Fahad Alhodaithy"
+date: 
+output:
+  html_document: default
+  word_document: default
+  pdf_document: default
+---
+
+
+
+
+#Loading the libraries
+
+```{r Loading the libraries, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(ggrepel)
+library(palmerpenguins)
+library(ggridges)
+library(gghalves)
+library(data.table)
+library(WDI)
+library(tidyr)
+library(gridExtra)
+library(ggforce)
+library(gg.gap)
+library(ggplot2)
+library(sf)
+library(gridExtra)
+library(grid)
+library(patchwork)
+```
+
+#loaditng my raw datas
+
+```{r loaditng my raw datas, warning=FALSE, message=FALSE}
+KSI_WDI_Unemployment_raw <- c("SA") 
+indicators <- "SL.UEM.TOTL.ZS"
+KSI_WDI_Unemployment_raw <- WDI(country = c("SA"), indicators, extra = TRUE, start = 2007, end = 2016)
+KSA_Investment_Fund_raw <- read_csv("data/SAMA_StatisticalReport_2022.csv", na = c("", "NA", "N/A"))
+KSA_Annual_Government_Revenues_And_Expenditures_by_Sector_raw <- read_csv("data/Annual_Government _Revenues_And_Expenditures_by_Sector _Actual.csv", na = c("", "NA", "N/A"))
+KSA_Public_Debt_raw <- read_csv("data/MOF_Public_Debt.csv", na = c("", "NA", "N/A"))
+KSA_Oil_Production_raw <- read_csv("data/KSA_Oil_Production.csv", na = c("", "NA", "N/A"))
+KSA_Crude_Oil_Production_raw <- read_csv("data/KSA_Crude_Oil_Production.csv", na = c("", "NA", "N/A"))
+KSA_higher_education_raw <- read_csv("data/MOE.csv", na = c("", "NA", "N/A"))
+world_shapes <- read_sf("data/ne_110m_admin_0_countries/ne_110m_admin_0_countries.shp")
+```
+
+#loaditng my raw data from the world bank
+
+```{r loaditng my raw data from the world bank, warning=FALSE, message=FALSE}
+KSI_WDI_Unemployment_raw <- c("SA") 
+indicators <- "SL.UEM.TOTL.ZS"
+KSI_WDI_Unemployment_raw <- WDI(country = c("SA"), indicators, extra = TRUE, start = 2007, end = 2016)
+```
+
+#Cleaning my raw data
+
+```{r Cleaning my raw data , warning=FALSE, message=FALSE}
+#First data set(from the world bank)
+KSI_WDI_Unemployment <- KSI_WDI_Unemployment_raw %>%
+  rename(Unemployment = `SL.UEM.TOTL.ZS`) %>%
+  select(Unemployment, year)
+
+#Second data set (from the Ministry of Energy)
+
+KSA_Annual_Government_Revenues_And_Expenditures_by_Sector <- KSA_Annual_Government_Revenues_And_Expenditures_by_Sector_raw %>% 
+  filter(Column %in%  c("Oil Revenues" , "Non-oil Revenues")) %>% 
+  select("Column","2007", "2008", "2009","2010", "2011", "2012", "2013", "2014", "2015","2016") %>%
+  rename(revenue_type = Column) %>%
+  pivot_longer(cols = -revenue_type, names_to = "Year", values_to = "Amount") %>%
+  mutate(Amount = as.numeric(Amount))
+
+#Third data set (from the Ministry of Education)
+
+KSA_higher_education <- KSA_higher_education_raw %>% 
+  pivot_longer(-Date, names_to = "gender_degree", values_to = "count") %>%
+  separate(gender_degree, into = c("gender", "degree"), sep = "ZZZ") %>%
+  filter(gender %in%  c("Male" , "Female"))
+
+#Fourth data set (From The General Authority for Statistics)
+
+export_2020 <- read_csv("data/export.csv") %>%
+  rename(Value = `Value`,
+         ISO_A3 = Code)
+export_2020_map <- world_shapes %>%
+  left_join(export_2020, by = "ISO_A3") %>%
+  filter(ISO_A3 != "ATA")
+
+#Fifth data set(From The General Authority for Statistics)
+
+imports_2020 <- read_csv("data/imports.csv") %>%
+  rename(Value = `Value`,
+         ISO_A3 = Code)
+imports_2020_map <- world_shapes %>%
+  left_join(imports_2020, by = "ISO_A3") %>%
+  filter(ISO_A3 != "ATA")
+
+#Sixth data set (From The Ministry of Finance)
+
+KSA_Public_Debt <- KSA_Public_Debt_raw %>% 
+  filter(Date %in%  c("2010", "2011", "2012", "2013", "2014", "2015","2016", "2017", "2018","2019","2020")) %>% 
+  select("Date","Total Public Debt") %>%
+  rename(Year = Date) %>%
+  rename(Total_Public_Debt = "Total Public Debt")
+```
+
+#Figure 1:Unemployment rate in Saudi Arabia from 2007 to 2016
+
+```{r fig.width=12, fig.height=10, warning=FALSE, message=FALSE}
+ggplot(KSI_WDI_Unemployment, aes(x = year, y = Unemployment)) +
+  geom_line(colour = "#F8766D") +
+  geom_smooth(method = "lm", colour = "#00BFC4")+
+  labs(title = "Unemployment rate in Saudi Arabia from 2007 to 2016", subtitle = "(modeled ILO estimate)", x = "Year", y = "Unemployment Rate", caption = "Source: The World Bank") + 
+  theme(panel.grid.major = element_line(size = 0.7), axis.text = element_text(family = "#00BFC4"), legend.title = element_text(family = "#00BFC4"), plot.background = element_rect(colour = "#F8766D")) +
+  scale_x_continuous(breaks = seq(2007, 2016, by = 1)) +
+  theme_minimal()+
+  annotate(geom = "text", x = 2010, y = 5.85, label = " Highest unemployment rate", 
+           hjust = 0, color = "#00BFC4")
+```
+
+
+
+#Figure 2:Oil revenues and non-oil revenues from 2007 to 2016
+
+
+
+```{r fig.width=7, fig.height=, warning=FALSE, message=FALSE}
+ggplot(KSA_Annual_Government_Revenues_And_Expenditures_by_Sector, aes(x = Year, y = Amount, colour = revenue_type, group = revenue_type)) +
+geom_line(size = 1) +
+geom_point(size = 3)+
+geom_line() +
+scale_color_manual(values = c("#252DFA", "#39F65F", "#AD9008","#FFAF3D")) +
+  labs(title = "Oil revenues and non-oil revenues from 2007 to 2016", subtitle = "Unit :Million (SAR)",x = NULL,y = "Revenue amount",
+caption = "Source: Ministry of Energy")+
+  theme_minimal() +
+  scale_y_continuous(breaks = seq(70000, 1200000, by = 100000)) +
+  scale_color_manual(values = c("#F8766D", "#00BFC4"))
+  
+  
+```
+
+
+
+
+#Figure 3: Number of higher education graduates in Saudi Arabia from 2008 to 2018
+
+
+```{r fig.width=21, fig.height=15, warning=FALSE, message=FALSE}
+ggplot(KSA_higher_education, aes(x = Date, y = count, fill = gender)) + geom_col() +
+  facet_wrap(vars(degree))+ labs(title = "Number of higher education graduates in Saudi Arabia from 2007 to 2016", x = NULL, y = "Number of graduates", caption = "Source: Ministry of Education") +
+  facet_wrap(~degree, scales = "free_y")+
+   scale_x_continuous(breaks = seq(2008, 2018, by = 1)) +
+  theme(axis.text.x = element_text(angle = 70, hjust = 1))
+```
+
+
+
+
+
+#Figure 4 and 5 :Major Saudi Arabia Exports and Imports by Country in 2020
+
+
+
+
+```{r fig.width=20, fig.height=20, warning=FALSE, message=FALSE}
+#Figure 4:Major Saudi Arabia Exports by Country in 2020
+
+exports <- ggplot() +
+  geom_sf(data = export_2020_map, aes(fill = Value),
+          size = 0.25) +
+  coord_sf(crs = st_crs("ESRI:54030")) +
+  scale_fill_viridis_c(option = "viridis") +
+  labs(fill = "Value") +
+  theme_void() +
+  theme(legend.position = "right")+
+  labs(title = "Major Saudi Arabia Exports by Country in 2020",
+       caption = "Source: General Authority for Statistics")+
+  annotation_custom(grob = textGrob("(In Millions SAR)"),  
+        xmin = 22000000, xmax = 10000000, ymin = 7000000, ymax = 1000)
+
+#Figure 5:Major Saudi Arabia imports by Country in 2020
+
+imports <- ggplot() +
+  geom_sf(data = imports_2020_map, aes(fill = Value),
+          size = 0.25) +
+  coord_sf(crs = st_crs("ESRI:54030")) +
+  scale_fill_viridis_c(option = "viridis") +
+  labs(fill = "Value") +
+  theme_void() +
+  theme(legend.position = "right")+
+  labs(title = "Major Saudi Arabia Imports By Country in 2020",
+       caption = "Source: General Authority for Statistics")+
+  annotation_custom(grob = textGrob("(In Millions SAR)"),  
+        xmin = 22000000, xmax = 10000000, ymin = 7000000, ymax = 1000)
+
+#Combining plot
+
+exports / imports
+
+```
+
+
+
+
+#Figure 6: Total Public Debt in Saudi Arabia from 2010 to 2020
+
+
+```{r fig.width=10, fig.height=8, warning=FALSE, message=FALSE}
+ggplot(KSA_Public_Debt,  aes( x= Year, y = Total_Public_Debt, fill= Year)) + 
+geom_pointrange(aes(ymin = 0, ymax = Total_Public_Debt), fatten = 5, size = 1.5, color= "#00BFC4", fill="#253629")+ 
+  labs(title = "Total Public Debt in Saudi Arabia from 2010 to 2020", x = "Year", y = "Total Public Debt ", subtitle = "Unit :Million (SAR)", caption = "Source: Ministry of Finance
+")+
+  theme_minimal()+
+  scale_y_continuous(breaks = seq(40000, 900000, by = 100000))+
+  scale_x_continuous(breaks = seq(2010, 2020, by = 1))
+```
+
+
+
+# Final figure
+
+
+
+
+
+![Caption goes here](final project-updated.png)
+
